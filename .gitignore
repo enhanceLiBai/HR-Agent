@@ -1,0 +1,18 @@
+# 环境变量（含 API Key）
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 数据库
+hr.db
+
+# RAG 索引（可重建）
+rag/faiss_index.bin
+rag/chunks.pkl
+
+# IDE
+.vscode/
+.idea/
