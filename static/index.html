@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Agent — 智能助手</title>
+    <link rel="stylesheet" href="/static/style.css?v=__VERSION__">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>HR Agent</h1>
+            <div class="header-right">
+                <span id="user-name">加载中…</span>
+                <span id="user-dept"></span>
+                <button id="logout-btn">退出</button>
+            </div>
+        </header>
+        <main id="chat-container"></main>
+        <footer>
+            <textarea id="user-input" placeholder="输入消息，回车发送…" rows="1"></textarea>
+            <button id="send-btn">发送</button>
+        </footer>
+    </div>
+    <script src="/static/app.js?v=__VERSION__"></script>
+</body>
+</html>

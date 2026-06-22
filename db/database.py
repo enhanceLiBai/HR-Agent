@@ -6,7 +6,14 @@ from sqlalchemy.orm import sessionmaker, Session
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hr.db")
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    connect_args={
+        "check_same_thread": False,
+        "timeout": 10,  # 写锁等待 10 秒
+    },
+)
 SessionLocal = sessionmaker(bind=engine)
 
 

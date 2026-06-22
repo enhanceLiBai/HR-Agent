@@ -49,7 +49,8 @@ def main():
             "FROM leave_requests lr JOIN employees e ON lr.employee_id = e.id "
             "ORDER BY lr.created_at DESC"
         )).fetchall()
-        status_cn = {"pending": "⏳待审批", "approved": "✅已批准", "rejected": "❌已拒绝"}
+        status_cn = {"pending": "⏳待审批", "approved": "✅已批准", "rejected": "❌已拒绝",
+                     "cancelled": "↩️已撤回", "revoked": "🔄已撤销", "completed_early": "🏁已销假"}
         if not rows:
             print("  (暂无记录)")
         for r in rows:
@@ -59,6 +60,26 @@ def main():
             comment = f" | {r.approver_comment}" if r.approver_comment else ""
             print(f"  [{r.id}] {r.name} | {name} {r.days}天 | {date_range} | {status}{comment}")
             print(f"           提交时间: {r.created_at}")
+
+        # ── 考勤记录表 ──
+        print(f"\n{'=' * 70}")
+        print("  🕐 考勤记录 (2026年6月)")
+        print("=" * 70)
+        attn_rows = session.execute(text(
+            "SELECT a.employee_id, e.name, a.date, a.check_in, a.check_out, a.status "
+            "FROM attendance_records a JOIN employees e ON a.employee_id = e.id "
+            "ORDER BY a.date, a.employee_id"
+        )).fetchall()
+        status_icon = {"normal": "✅", "late": "⚠️ ", "absent": "❌"}
+        current_emp = ""
+        for a in attn_rows:
+            if a.employee_id != current_emp:
+                current_emp = a.employee_id
+                print(f"\n  [{a.name}]")
+            icon = status_icon.get(a.status, "  ")
+            check_in = a.check_in or "--:--"
+            check_out = a.check_out or "--:--"
+            print(f"    {a.date}  {check_in}-{check_out}  {icon} {a.status}")
 
         print()
     finally:

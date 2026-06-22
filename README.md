@@ -10,9 +10,25 @@
 | 向量模型 | 智谱 embedding-2 |
 | 向量存储 | FAISS (本地) |
 | 数据库 | SQLite |
-| 框架 | 纯手写 Python，零框架 |
+| Web 框架 | FastAPI + 原生 HTML/JS |
+| Agent 框架 | 纯手写，零框架 |
 
 ## 快速启动
+
+### 方式一：Web 界面（推荐）
+
+```bash
+# 启动 Web 服务
+python api.py
+```
+
+浏览器打开 `http://127.0.0.1:8000`，即可在聊天界面中使用。
+
+### 方式二：命令行
+
+```bash
+python app.py
+```
 
 ### 1. 安装依赖
 

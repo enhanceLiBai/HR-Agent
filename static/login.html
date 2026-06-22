@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Agent — 登录</title>
+    <link rel="stylesheet" href="/static/style.css?v=__VERSION__">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-header">
+            <h1>🏢 HR Agent</h1>
+            <p>智能人力资源助手</p>
+        </div>
+
+        <form class="auth-form" id="login-form" autocomplete="off">
+            <div class="form-group">
+                <label for="employee-id">工号</label>
+                <input type="text" id="employee-id" placeholder="emp_0001" maxlength="10" autofocus>
+                <span class="field-hint">格式：emp_ + 4位数字</span>
+                <span class="field-error" id="id-error">请输入正确的工号格式</span>
+            </div>
+
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" placeholder="请输入密码">
+                <span class="field-error" id="pw-error">请输入密码</span>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary" id="login-btn">登 录</button>
+            </div>
+
+            <div class="form-error" id="form-error"></div>
+        </form>
+
+        <div class="form-footer">
+            没有账号？<a href="/static/register.html">去注册</a>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('login-form');
+        const idInput = document.getElementById('employee-id');
+        const pwInput = document.getElementById('password');
+        const loginBtn = document.getElementById('login-btn');
+        const formError = document.getElementById('form-error');
+        const idError = document.getElementById('id-error');
+        const pwError = document.getElementById('pw-error');
+
+        const ID_REGEX = /^emp_\d{4}$/;
+
+        function showFieldError(el) { el.style.display = 'block'; }
+        function hideFieldError(el) { el.style.display = 'none'; }
+        function showFormError(msg) { formError.textContent = msg; formError.style.display = 'block'; }
+        function hideFormError() { formError.style.display = 'none'; }
+
+        idInput.addEventListener('input', () => {
+            idInput.classList.remove('input-error');
+            hideFieldError(idError);
+            hideFormError();
+        });
+        pwInput.addEventListener('input', () => {
+            pwInput.classList.remove('input-error');
+            hideFieldError(pwError);
+            hideFormError();
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideFormError();
+            hideFieldError(idError);
+            hideFieldError(pwError);
+            idInput.classList.remove('input-error');
+            pwInput.classList.remove('input-error');
+
+            const employeeId = idInput.value.trim();
+            const password = pwInput.value;
+
+            // 前端校验
+            let valid = true;
+            if (!ID_REGEX.test(employeeId)) {
+                idInput.classList.add('input-error');
+                showFieldError(idError);
+                valid = false;
+            }
+            if (!password) {
+                pwInput.classList.add('input-error');
+                showFieldError(pwError);
+                valid = false;
+            }
+            if (!valid) return;
+
+            // 发送请求
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登录中…';
+
+            try {
+                const resp = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ employee_id: employeeId, password }),
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    showFormError(err.detail || '登录失败');
+                    return;
+                }
+
+                const data = await resp.json();
+                // 保存 session
+                sessionStorage.setItem('hr_agent_session', data.session_id);
+                sessionStorage.setItem('hr_agent_employee_id', data.employee_id);
+                // 跳转聊天页
+                window.location.href = '/static/index.html?v=__VERSION__';
+            } catch (err) {
+                showFormError('网络错误：' + err.message);
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登 录';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -33,6 +33,21 @@ TOOL_GET_MY_LEAVE_HISTORY = {
     }
 }
 
+TOOL_SEARCH_EMPLOYEE = {
+    "type": "function",
+    "function": {
+        "name": "search_employee",
+        "description": "按名字关键字搜索员工，返回匹配员工的工号、姓名、部门、职位。当管理者只知道员工名字不知道工号时，先用此工具查到工号。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "keyword": {"type": "string", "description": "名字关键字，支持模糊匹配"}
+            },
+            "required": ["keyword"]
+        }
+    }
+}
+
 
 def get_employee(employee_id: str) -> str:
     """
@@ -98,11 +113,12 @@ def get_my_leave_history(employee_id: str, limit: int = 10) -> str:
         if not rows:
             return "您目前没有请假记录。"
 
-        status_map = {"pending": "待审批", "approved": "已批准", "rejected": "已拒绝"}
+        status_map = {"pending": "待审批", "approved": "已批准", "rejected": "已拒绝",
+                      "cancelled": "已撤回", "revoked": "已撤销", "completed_early": "已销假"}
         type_map = {
             "annual": "年假", "personal": "事假", "sick": "病假",
             "marriage": "婚假", "bereavement": "丧假",
-            "maternity": "产假", "paternity": "陪产假"
+            "maternity": "产假", "paternity": "陪产假", "comp": "调休假"
         }
 
         lines = ["您的最近请假记录："]
@@ -112,6 +128,40 @@ def get_my_leave_history(employee_id: str, limit: int = 10) -> str:
             date_range = row.start_date if row.start_date == row.end_date else f"{row.start_date}至{row.end_date}"
             lines.append(f"{i}. [{row.id}] {leave_type_cn} {row.days}天 ({date_range}) - {status_cn}")
 
+        return "\n".join(lines)
+    finally:
+        session.close()
+
+
+def search_employee(keyword: str) -> str:
+    """
+    按名字模糊搜索员工，返回工号 + 基本信息。
+
+    参数:  keyword - 名字关键字，支持模糊匹配
+
+    返回:  "[emp_003] 王小明 | 技术部 | 工程师 | 上级：李经理"
+           搜不到: "未找到名字包含 "xxx" 的员工。"
+    """
+    session = get_session()
+    try:
+        rows = session.execute(
+            text("SELECT id, name, department, position, manager_id "
+                 "FROM employees WHERE name LIKE :kw ORDER BY id"),
+            {"kw": f"%{keyword}%"}
+        ).fetchall()
+        if not rows:
+            return f'未找到名字包含 "{keyword}" 的员工。'
+        lines = [f'搜索 "{keyword}" 找到 {len(rows)} 人：']
+        for r in rows:
+            mgr_name = "无"
+            if r.manager_id:
+                mgr = session.execute(
+                    text("SELECT name FROM employees WHERE id = :id"),
+                    {"id": r.manager_id}
+                ).fetchone()
+                if mgr:
+                    mgr_name = mgr.name
+            lines.append(f"[{r.id}] {r.name} | {r.department} | {r.position} | 上级：{mgr_name}")
         return "\n".join(lines)
     finally:
         session.close()

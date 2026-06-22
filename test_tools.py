@@ -184,6 +184,122 @@ def test_permission_denied():
     print(f"  ✅ test_permission_denied — 跨级审批结果: {r[:60]}...")
 
 
+def test_cancel():
+    """测试员工撤回 pending 申请"""
+    from tools.leave import create_leave_request, cancel_leave_request
+
+    # 王小明请事假
+    r = create_leave_request("emp_003", "personal", "2026-06-22", "2026-06-22", "临时有事不请了")
+    req_id = r.split("编号 ")[1].split("）")[0]
+
+    # 王小明自己撤回
+    r = cancel_leave_request(req_id, "emp_003")
+    assert "已撤回" in r, f"撤回应成功: {r}"
+    assert "余额未受影响" in r, f"不应影响余额: {r}"
+
+    # 重复撤回应失败
+    r = cancel_leave_request(req_id, "emp_003")
+    assert "已撤回" in r or "无需重复" in r or "已" in r, f"重复撤回应提示: {r}"
+
+    print("  ✅ test_cancel — 员工撤回待审批申请")
+
+
+def test_cancel_permission():
+    """测试非本人不能撤回"""
+    from tools.leave import create_leave_request, cancel_leave_request
+
+    # 王小明请事假
+    r = create_leave_request("emp_003", "personal", "2026-06-23", "2026-06-23", "测试")
+    req_id = r.split("编号 ")[1].split("）")[0]
+
+    # 李经理试图撤回王小明的申请
+    r = cancel_leave_request(req_id, "emp_002")
+    assert "只能撤回自己" in r, f"非本人不能撤回: {r}"
+
+    print("  ✅ test_cancel_permission — 非本人不可撤回")
+
+
+def test_revoke():
+    """测试管理者撤销已批准但未开始的申请"""
+    from tools.leave import create_leave_request, approve_leave, revoke_leave_request, query_leave_balance
+
+    # 李经理请年假（余额5/0 → 5/1 after approve）
+    r = create_leave_request("emp_002", "annual", "2026-07-01", "2026-07-02", "计划有变")
+    req_id = r.split("编号 ")[1].split("）")[0]
+
+    # 张总审批通过
+    approve_leave(req_id, "emp_001", "同意")
+    balance_before = query_leave_balance("emp_002", "annual")
+
+    # 张总撤销（假期在7月，今天6月，未开始）
+    r = revoke_leave_request(req_id, "emp_001", "项目需要，先别休假")
+    assert "已撤销" in r, f"撤销应成功: {r}"
+    assert "已退回" in r, f"应退回余额: {r}"
+
+    # 余额应退回
+    balance_after = query_leave_balance("emp_002", "annual")
+    print(f"  ✅ test_revoke — 撤销已批准申请，余额已退回 ({balance_before} → {balance_after})")
+
+
+def test_revoke_started():
+    """测试假期已开始不能撤销"""
+    from tools.leave import create_leave_request, approve_leave, revoke_leave_request
+
+    # 李经理请过去日期的假（模拟已开始的假期）
+    r = create_leave_request("emp_002", "annual", "2026-06-01", "2026-06-01", "测试")
+    req_id = r.split("编号 ")[1].split("）")[0]
+
+    # 张总审批通过
+    approve_leave(req_id, "emp_001", "同意")
+
+    # 尝试撤销已开始的假期
+    r = revoke_leave_request(req_id, "emp_001", "晚了")
+    assert "已开始" in r or "无法撤销" in r, f"已开始不能撤销: {r}"
+
+    print("  ✅ test_revoke_started — 假期已开始不能撤销")
+
+
+def test_attendance():
+    """测试考勤记录查询"""
+    from tools.attendance import query_my_attendance, get_attendance_stats
+
+    # 王小明的考勤记录
+    r = query_my_attendance("emp_003", "2026-06")
+    assert "王小明" in r, f"应包含姓名: {r}"
+    assert "迟到" in r, f"王小明有迟到记录: {r}"
+    assert "正常" in r, f"应有正常记录: {r}"
+
+    # 王小明的考勤统计
+    r = get_attendance_stats("emp_003", "2026-06")
+    assert "迟到" in r, f"应有迟到统计: {r}"
+    assert "全勤奖" in r, f"迟到>3次应提醒全勤奖: {r}"
+
+    # 张总考勤统计（迟到2次，不到3次）
+    r = get_attendance_stats("emp_001", "2026-06")
+    assert "迟到" in r, f"张总也有迟到: {r}"
+
+    # 李经理缺勤
+    r = get_attendance_stats("emp_002", "2026-06")
+    assert "缺勤" in r, f"李经理有缺勤: {r}"
+
+    print("  ✅ test_attendance — 考勤记录和统计")
+
+
+def test_dashboard():
+    """测试仪表盘"""
+    from tools.dashboard import check_my_dashboard
+
+    # 王小明仪表盘：迟到多 + 无待审批 + 无即将到来请假
+    r = check_my_dashboard("emp_003")
+    assert "迟到" in r or "全勤奖" in r or "一切正常" in r, f"应显示考勤: {r}"
+
+    # 张总仪表盘：无待审批（初始状态）
+    r = check_my_dashboard("emp_001")
+    assert isinstance(r, str), f"仪表盘应返回字符串"
+
+    print("  ✅ test_dashboard — 仪表盘检查")
+
+
 def test_get_my_leave_history():
     """测试历史记录"""
     from tools.employee import get_my_leave_history
@@ -199,6 +315,98 @@ def test_loader():
     chunks = load_policies()
     assert len(chunks) >= 10, f"chunk 数应 >= 10，实际 {len(chunks)}"
     print(f"  ✅ test_loader — 加载 {len(chunks)} 个文档片段")
+
+
+def test_search_employee():
+    """测试按名字搜索员工"""
+    from tools.employee import search_employee
+
+    # 精确搜索
+    r = search_employee("王小明")
+    assert "emp_003" in r, f"应找到王小明: {r}"
+    assert "技术部" in r and "工程师" in r, f"应显示部门和职位: {r}"
+    assert "李经理" in r, f"应显示上级: {r}"
+
+    # 模糊搜索
+    r = search_employee("张")
+    assert "emp_001" in r and "张总" in r, f"应找到张总: {r}"
+
+    # 无匹配
+    r = search_employee("不存在的名字")
+    assert "未找到" in r, f"应提示未找到: {r}"
+
+    print("  ✅ test_search_employee")
+
+
+def test_adjust_leave_balance():
+    """测试管理者调整员工假期余额"""
+    from tools.leave import adjust_leave_balance
+    from tools.leave import query_leave_balance
+    from db.database import get_session
+    from sqlalchemy import text
+
+    # ── 用例1: 正常增加 ──
+    r = adjust_leave_balance("emp_002", "emp_003", "annual", 3.0, "表现优秀奖励")
+    assert "✅" in r, f"增加应成功: {r}"
+    assert "3" in r, f"应显示增加3天: {r}"
+
+    # 验证余额
+    bal = query_leave_balance("emp_003", "annual")
+    assert "8" in bal, f"王小明 original total=5 + 3 = 8, actual: {bal}"
+
+    # ── 用例2: 正常扣减 ──
+    r = adjust_leave_balance("emp_002", "emp_003", "annual", -2.0, "录入错误纠正")
+    assert "✅" in r, f"扣减应成功: {r}"
+
+    bal = query_leave_balance("emp_003", "annual")
+    assert "6" in bal, f"王小明 total 8 - 2 = 6, actual: {bal}"
+
+    # ── 用例3: 权限不足 ──
+    r = adjust_leave_balance("emp_001", "emp_003", "annual", 1.0, "越权操作")
+    assert "❌" in r and "权限不足" in r, f"非直属上级应被拒绝: {r}"
+
+    # ── 用例4: amount=0 ──
+    r = adjust_leave_balance("emp_002", "emp_003", "annual", 0.0, "测试零值")
+    assert "❌" in r and "不能为 0" in r, f"零值应被拒绝: {r}"
+
+    # ── 用例5: reason 为空 ──
+    r = adjust_leave_balance("emp_002", "emp_003", "annual", 1.0, "")
+    assert "❌" in r and "不能为空" in r, f"空原因应被拒绝: {r}"
+
+    r = adjust_leave_balance("emp_002", "emp_003", "annual", 1.0, "   ")
+    assert "❌" in r and "不能为空" in r, f"纯空格原因应被拒绝: {r}"
+
+    # ── 用例6: 扣减后余额为负 ──
+    # 王小明年假 total=6 used=5 remaining=1
+    r = adjust_leave_balance("emp_002", "emp_003", "annual", -5.0, "测试超额扣减")
+    assert "❌" in r and ("不能为负" in r or "扣减" in r), f"超额扣减应被拒绝: {r}"
+
+    # ── 用例7: 余额不存在 + 增加 → 自动创建 ──
+    r = adjust_leave_balance("emp_002", "emp_003", "maternity", 3.0, "补录产假额度")
+    assert "✅" in r, f"额度不存在时增加应自动创建: {r}"
+
+    bal = query_leave_balance("emp_003", "maternity")
+    assert "3" in bal and "0" in bal, f"产假 total=3 used=0, actual: {bal}"
+
+    # ── 用例8: 余额不存在 + 扣减 → 报错 ──
+    r = adjust_leave_balance("emp_002", "emp_003", "paternity", -1.0, "测试扣减不存在的记录")
+    assert "❌" in r and "没有" in r, f"额度不存在时扣减应报错: {r}"
+
+    # ── 用例9: comp 类型调整 ──
+    r = adjust_leave_balance("emp_002", "emp_003", "comp", 2.0, "补调休额度")
+    assert "✅" in r, f"comp 类型调整应成功: {r}"
+
+    # ── 用例10: 审计日志 ──
+    session = get_session()
+    try:
+        rows = session.execute(
+            text("SELECT COUNT(*) as cnt FROM leave_balance_adjustments")
+        ).fetchone()
+        assert rows.cnt >= 4, f"审计表至少应有4条记录，实际: {rows.cnt}"
+    finally:
+        session.close()
+
+    print("  ✅ test_adjust_leave_balance — 10 个场景全部通过")
 
 
 # ═══════════════════════════════════════
@@ -221,8 +429,16 @@ def run_all():
         ("总经理自动通过", test_auto_approve),
         ("拒绝流程", test_reject),
         ("跨级权限", test_permission_denied),
+        ("撤回申请", test_cancel),
+        ("撤回权限", test_cancel_permission),
+        ("撤销审批", test_revoke),
+        ("假期已开始撤销", test_revoke_started),
         ("请假历史", test_get_my_leave_history),
+        ("考勤查询", test_attendance),
+        ("仪表盘", test_dashboard),
         ("文档加载", test_loader),
+        ("搜索员工", test_search_employee),
+        ("调整假期余额", test_adjust_leave_balance),
     ]
 
     passed = 0

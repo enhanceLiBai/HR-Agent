@@ -8,11 +8,21 @@ __pycache__/
 
 # 数据库
 hr.db
+*.db
 
 # RAG 索引（可重建）
 rag/faiss_index.bin
 rag/chunks.pkl
 
+# 日志
+*.log
+
+# 飞书调试日志
+_feishu_*.log
+
 # IDE
 .vscode/
 .idea/
+
+# 简历（本地文件，不提交）
+简历.md

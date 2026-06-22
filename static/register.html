@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Agent — 注册</title>
+    <link rel="stylesheet" href="/static/style.css?v=__VERSION__">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-header">
+            <h1>📝 HR Agent</h1>
+            <p>注册新员工账号</p>
+        </div>
+
+        <form class="auth-form" id="register-form" autocomplete="off">
+            <div class="form-group">
+                <label for="employee-id">工号</label>
+                <input type="text" id="employee-id" placeholder="emp_0001" maxlength="10" autofocus>
+                <span class="field-hint">格式：emp_ + 4位数字，如 emp_0001</span>
+                <span class="field-error" id="id-error">工号格式：emp_ + 4位数字</span>
+            </div>
+
+            <div class="form-group">
+                <label for="name">姓名</label>
+                <input type="text" id="name" placeholder="请输入姓名" maxlength="20">
+                <span class="field-error" id="name-error">请输入姓名</span>
+            </div>
+
+            <div class="form-group">
+                <label for="department">部门</label>
+                <select id="department">
+                    <option value="">-- 请选择部门 --</option>
+                    <!-- JS 动态填充已有部门 -->
+                    <option value="__other__">其他（新建部门）</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="custom-dept-group">
+                <label for="custom-dept">新部门名称</label>
+                <input type="text" id="custom-dept" placeholder="请输入新部门名称" maxlength="30">
+                <span class="field-error" id="dept-error">请选择或输入部门</span>
+            </div>
+
+            <div class="form-group">
+                <label for="position">职位</label>
+                <input type="text" id="position" placeholder="如：工程师、产品经理" maxlength="30">
+                <span class="field-error" id="pos-error">请输入职位</span>
+            </div>
+
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" placeholder="至少 6 个字符">
+                <span class="field-error" id="pw-error">密码至少需要 6 个字符</span>
+            </div>
+
+            <div class="form-group">
+                <label for="confirm-password">确认密码</label>
+                <input type="password" id="confirm-password" placeholder="再次输入密码">
+                <span class="field-error" id="cpw-error">两次输入的密码不一致</span>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary" id="reg-btn">注 册</button>
+            </div>
+
+            <div class="form-error" id="form-error"></div>
+        </form>
+
+        <div class="form-footer">
+            已有账号？<a href="/static/login.html">去登录</a>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('register-form');
+        const idInput = document.getElementById('employee-id');
+        const nameInput = document.getElementById('name');
+        const deptSelect = document.getElementById('department');
+        const customDeptGroup = document.getElementById('custom-dept-group');
+        const customDeptInput = document.getElementById('custom-dept');
+        const posInput = document.getElementById('position');
+        const pwInput = document.getElementById('password');
+        const cpwInput = document.getElementById('confirm-password');
+        const regBtn = document.getElementById('reg-btn');
+        const formError = document.getElementById('form-error');
+
+        const ID_REGEX = /^emp_\d{4}$/;
+
+        function showFieldError(el) { if (el) el.style.display = 'block'; }
+        function hideFieldError(el) { if (el) el.style.display = 'none'; }
+        function showFormError(msg) { formError.textContent = msg; formError.style.display = 'block'; }
+        function hideFormError() { formError.style.display = 'none'; }
+
+        // ── 加载已有部门到下拉框 ──
+        async function loadDepartments() {
+            try {
+                const resp = await fetch('/api/employees');
+                if (!resp.ok) return;
+                const employees = await resp.json();
+                const depts = [...new Set(employees.map(e => e.department))].sort();
+                depts.forEach(dept => {
+                    const opt = document.createElement('option');
+                    opt.value = dept;
+                    opt.textContent = dept;
+                    // 插入到"其他"选项之前
+                    deptSelect.insertBefore(opt, deptSelect.lastElementChild);
+                });
+            } catch (_) { /* 非关键 */ }
+        }
+
+        // ── 部门切换：选"其他"时显示自定义输入 ──
+        deptSelect.addEventListener('change', () => {
+            if (deptSelect.value === '__other__') {
+                customDeptGroup.style.display = 'block';
+                customDeptInput.focus();
+            } else {
+                customDeptGroup.style.display = 'none';
+                customDeptInput.value = '';
+                hideFieldError(document.getElementById('dept-error'));
+            }
+            hideFormError();
+        });
+
+        // ── 清除错误状态 ──
+        document.querySelectorAll('input, select').forEach(el => {
+            el.addEventListener('input', () => {
+                el.classList.remove('input-error');
+                hideFormError();
+            });
+            el.addEventListener('change', () => {
+                el.classList.remove('input-error');
+                hideFormError();
+            });
+        });
+
+        // ── 提交 ──
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideFormError();
+            document.querySelectorAll('.field-error').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('input, select').forEach(el => el.classList.remove('input-error'));
+
+            const employeeId = idInput.value.trim();
+            const name = nameInput.value.trim();
+            const deptValue = deptSelect.value;
+            const department = deptValue === '__other__' ? customDeptInput.value.trim() : deptValue;
+            const position = posInput.value.trim();
+            const password = pwInput.value;
+            const confirmPassword = cpwInput.value;
+
+            // 前端校验
+            let valid = true;
+            if (!ID_REGEX.test(employeeId)) {
+                idInput.classList.add('input-error');
+                showFieldError(document.getElementById('id-error'));
+                valid = false;
+            }
+            if (!name) {
+                nameInput.classList.add('input-error');
+                showFieldError(document.getElementById('name-error'));
+                valid = false;
+            }
+            if (!department) {
+                if (deptValue === '__other__') {
+                    customDeptInput.classList.add('input-error');
+                } else {
+                    deptSelect.classList.add('input-error');
+                }
+                showFieldError(document.getElementById('dept-error'));
+                valid = false;
+            }
+            if (!position) {
+                posInput.classList.add('input-error');
+                showFieldError(document.getElementById('pos-error'));
+                valid = false;
+            }
+            if (password.length < 6) {
+                pwInput.classList.add('input-error');
+                showFieldError(document.getElementById('pw-error'));
+                valid = false;
+            }
+            if (password !== confirmPassword) {
+                cpwInput.classList.add('input-error');
+                showFieldError(document.getElementById('cpw-error'));
+                valid = false;
+            }
+            if (!valid) return;
+
+            // 发送请求
+            regBtn.disabled = true;
+            regBtn.textContent = '注册中…';
+
+            try {
+                const resp = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        employee_id: employeeId,
+                        name,
+                        department,
+                        position,
+                        password,
+                        confirm_password: confirmPassword,
+                    }),
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    showFormError(err.detail || '注册失败');
+                    return;
+                }
+
+                const data = await resp.json();
+                // 自动登录
+                sessionStorage.setItem('hr_agent_session', data.session_id);
+                window.location.href = '/static/index.html?v=__VERSION__';
+            } catch (err) {
+                showFormError('网络错误：' + err.message);
+            } finally {
+                regBtn.disabled = false;
+                regBtn.textContent = '注 册';
+            }
+        });
+
+        // 页面初始化
+        loadDepartments();
+    </script>
+</body>
+</html>
