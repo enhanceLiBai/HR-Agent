@@ -1,143 +1,125 @@
-# HR Agent - 智能助手
+# HR Agent — 智能人事助手
 
-纯命令行交互的 HR 智能助手。员工通过自然语言与 Agent 对话完成请假，Agent 自动检索公司制度、判断合规性、调用工具执行业务操作。
+LLM Agent 系统，覆盖请假、加班、考勤、审批、制度检索、仪表盘等人事场景。支持 **Web 聊天界面**（SSE 流式）和 **飞书机器人**双入口。
 
 ## 技术栈
 
 | 项 | 选型 |
 |---|------|
-| 对话模型 | DeepSeek v4 Flash |
+| 对话模型 | DeepSeek（openai SDK 兼容接口） |
 | 向量模型 | 智谱 embedding-2 |
-| 向量存储 | FAISS (本地) |
-| 数据库 | SQLite |
-| Web 框架 | FastAPI + 原生 HTML/JS |
-| Agent 框架 | 纯手写，零框架 |
+| 向量存储 | FAISS（本地） |
+| 数据库 | SQLite + SQLAlchemy text() 原生 SQL |
+| Web 框架 | FastAPI + SSE 流式推送 |
+| 飞书 SDK | lark-oapi（Webhook + 卡片消息） |
+| Agent 框架 | 纯手写，零框架依赖 |
 
-## 快速启动
+## 快速启动（Windows）
 
-### 方式一：Web 界面（推荐）
+### 1. 环境准备
 
-```bash
-# 启动 Web 服务
-python api.py
-```
+```powershell
+# 创建虚拟环境
+python -m venv .venv
 
-浏览器打开 `http://127.0.0.1:8000`，即可在聊天界面中使用。
+# 激活
+.\.venv\Scripts\Activate.ps1
 
-### 方式二：命令行
-
-```bash
-python app.py
-```
-
-### 1. 安装依赖
-
-```bash
+# 安装依赖
 pip install -r requirements.txt
 ```
 
 ### 2. 配置 API Key
 
-```bash
+```powershell
 cp .env.example .env
 ```
 
-编辑 `.env`，填入你的 DeepSeek 和智谱 API Key：
+编辑 `.env`，填入以下必填项：
 
-```
-DEEPSEEK_API_KEY=sk-your-deepseek-api-key
-ZHIPU_API_KEY=your-zhipu-api-key
+```ini
+# 必填
+DEEPSEEK_API_KEY=sk-your-key
+ZHIPU_API_KEY=your-key
+
+# 可选：飞书机器人（不启用飞书可不填）
+FEISHU_APP_ID=
+FEISHU_APP_SECRET=
 ```
 
 ### 3. 初始化数据库
 
-```bash
-python -c "from db.database import init_db; init_db()"
+```powershell
+python -c "from db.models import create_tables; create_tables()"
+python -c "from db.init_db import init_seed_data; init_seed_data()"
 ```
 
-### 4. 构建 RAG 索引（首次运行自动构建）
+### 4. 启动 Web 服务
 
-首次运行时会自动从 `policies.md` 构建 FAISS 索引，也可以手动触发：
-
-```bash
-python -c "from rag.loader import load_policies; from rag.retriever import build_index; build_index(load_policies())"
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+python api.py
 ```
 
-### 5. 启动
+浏览器打开 `http://127.0.0.1:8000`，注册/登录后即可使用。
 
-```bash
-python app.py
+### 5. （可选）启动飞书机器人
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+python feishu/webhook.py
 ```
 
-## 测试场景
-
-### 场景 A：正常请假（员工视角）
-
-```
-当前身份: 王小明 | 技术部 | 工程师 | 上级：李经理
-> 我想请一天年假，明天
-
-Agent: 检索制度 → 查询余额 → 发现年假已用完
-      "很抱歉，您本年度年假已用完（5.0天全部使用）。建议改为事假。"
-```
-
-### 场景 B：切换身份后正常请假
-
-```
-> switch emp_002
-切换到: 李经理 | 技术部 | 部门总监 | 上级：张总
-> 我要请年假，后天一天，家里装修
-
-Agent: 检索制度 → 查询余额（剩余5天） → 提交申请
-      "✅ 已提交。等待 张总 审批。"
-```
-
-### 场景 C：管理者审批
-
-```
-> 有要审批的吗
-
-Agent: list_pending_approvals → 查看当前管理者的待审批列表
-```
-
-### 场景 D：总经理自动通过
-
-```
-> switch emp_001
-切换到: 张总 | 管理部 | 总经理 | 上级：无
-> 请一天年假
-
-Agent: 无上级 → 自动通过
-```
+需先在飞书开放平台配置应用，并将 Webhook 地址指向本服务。
 
 ## 项目结构
 
 ```
 hr-agent/
-├── .env / .env.example         # 环境变量
-├── requirements.txt            # 依赖清单
-├── policies.md                 # 公司制度（RAG 知识源）
-├── core/
-│   ├── agent.py                # Agent 主循环
-│   ├── tool_registry.py        # 工具注册与分发
-│   └── system_prompt.py        # System Prompt
-├── tools/
-│   ├── policy.py               # search_policy —— RAG 检索制度
-│   ├── leave.py                # 请假工具
-│   └── employee.py             # 员工信息查询
-├── rag/
-│   ├── loader.py               # 加载 policies.md 并切片
-│   ├── embedder.py             # 智谱 embedding 封装
-│   └── retriever.py            # FAISS 索引 + 检索
-├── db/
-│   ├── database.py             # SQLAlchemy engine + session
-│   ├── models.py               # 数据表模型
-│   └── init_db.py              # 建表 + 种子数据
-└── app.py                      # 命令行交互入口
+├── .env.example                 # 环境变量模板
+├── requirements.txt             # 依赖清单
+├── policies.md                  # 公司制度（RAG 知识源）
+├── api.py                       # FastAPI Web 入口
+│
+├── core/                        # 核心引擎
+│   ├── agent.py                 # Agent 主循环（多轮 tool calling）
+│   ├── context_manager.py       # 上下文窗口管理（滑动窗口 + 正则摘要）
+│   ├── tool_registry.py         # 工具注册与执行分发
+│   ├── tool_planner.py          # 工具按需路由（关键词 + 角色分组）
+│   ├── system_prompt.py         # System Prompt 模板
+│   └── auth.py                  # 登录认证
+│
+├── tools/                       # 业务工具（22 个）
+│   ├── leave.py                 # 请假全流程
+│   ├── overtime.py              # 加班全流程
+│   ├── attendance.py            # 考勤查询
+│   ├── employee.py              # 员工信息
+│   ├── dashboard.py             # 仪表盘
+│   └── policy.py                # RAG 制度检索
+│
+├── db/                          # 数据层
+│   ├── database.py              # SQLAlchemy 连接
+│   ├── models.py                # 建表
+│   └── init_db.py               # 种子数据
+│
+├── rag/                         # RAG 检索
+│   ├── loader.py                # PDF/MD 文档加载
+│   ├── embedder.py              # 智谱 embedding-2 向量化
+│   └── retriever.py             # FAISS 索引 + 检索
+│
+├── feishu/                      # 飞书集成
+│   ├── webhook.py               # 消息处理 + 流式回复 + 卡片交互
+│   ├── identity.py              # 飞书用户 ↔ 员工工号绑定
+│   ├── card.py                  # 审批卡片构建
+│   └── adapter.py               # 消息格式适配
+│
+└── static/                      # Web 前端（原生 HTML/CSS/JS）
+    ├── index.html / app.js      # 聊天界面
+    ├── login.html               # 登录页
+    └── register.html            # 注册页
 ```
 
-## 修改制度
+## 编码注意事项
 
-只需编辑 `policies.md`，重新构建 FAISS 索引即可，无需改动任何代码。
-
-制度文档每条之间用 `---` 分隔。
+- **所有 Python 文件操作必须 `encoding='utf-8'`**，Windows 默认 GBK 会导致中文报错
+- PowerShell 运行 Python 前先 `$env:PYTHONIOENCODING='utf-8'`

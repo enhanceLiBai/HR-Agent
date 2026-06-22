@@ -26,3 +26,13 @@ _feishu_*.log
 
 # 简历（本地文件，不提交）
 简历.md
+
+# 开发/学习文档（本地，不提交）
+CLAUDE.md
+DEVELOPMENT_GUIDE.md
+FRONTEND_GUIDE.md
+LEARNING_LOG.md
+SESSION_SUMMARY.md
+2.0.0
+dev_docs/
+mini_agent/
